@@ -22,48 +22,33 @@ function run() {
             const projectPath = tl.getPathInput('project', true, true);
             const preset = tl.getInput('preset', true);
             const version = tl.getInput('version', true);
-            let wget = getTool('wget');
+            let fetchGodotResult = 0;
             if (shouldDownloadGodot(version)) {
-                wget.arg(`https://downloads.tuxfamily.org/godotengine/${version}/Godot_v${version}-stable_linux_server.64.zip`);
-                wget.arg("-O");
-                wget.arg(`${tl.getVariable("Agent.TempDirectory")}/godot.zip`);
-                let fetchGodotResult = yield wget.exec();
-                if (fetchGodotResult == 0) {
-                    let unzip = getTool('unzip');
-                    unzip.arg('-j');
-                    unzip.arg(`${tl.getVariable("Agent.TempDirectory")}/godot.zip`);
-                    unzip.arg('-d');
-                    unzip.arg(`${tl.getVariable("Agent.ToolsDirectory")}`);
-                    unzip.exec();
-                }
-                else {
-                    tl.setResult(tl.TaskResult.Failed, "Unable fetch godot executable");
-                    return;
-                }
+                fetchGodotResult = yield downloadFile(`https://downloads.tuxfamily.org/godotengine/${version}/Godot_v${version}-stable_linux_server.64.zip`, `${tl.getVariable("Agent.TempDirectory")}/godot.zip`);
             }
             else {
                 tl.logDetail("Godot Download", "Godot found will not re-download it");
             }
+            if (fetchGodotResult == 0) {
+                yield unzipArchive(`${tl.getVariable("Agent.TempDirectory")}/godot.zip`, `${tl.getVariable("Agent.ToolsDirectory")}`);
+            }
+            else {
+                tl.setResult(tl.TaskResult.Failed, "Unable fetch godot executable");
+                return;
+            }
+            let fetchTemplatesResult = 0;
             if (shouldDownloadTemplates(version)) {
-                wget.arg(`https://downloads.tuxfamily.org/godotengine/${version}/Godot_v${version}-stable_export_templates.tpz`);
-                wget.arg("-O");
-                wget.arg(`${tl.getVariable("Agent.TempDirectory")}/${version}-templates.zip`);
-                let fetchTemplatesResult = yield wget.exec();
-                if (fetchTemplatesResult == 0) {
-                    let unzip = getTool('unzip');
-                    unzip.arg('-j');
-                    unzip.arg(`${tl.getVariable("Agent.TempDirectory")}/templates.zip`);
-                    unzip.arg('-d');
-                    unzip.arg(`${templatesDir}/${version}`);
-                    unzip.exec();
-                }
-                else {
-                    tl.setResult(tl.TaskResult.Failed, "Unable fetch godot executable");
-                    return;
-                }
+                fetchTemplatesResult = yield downloadFile(`https://downloads.tuxfamily.org/godotengine/${version}/Godot_v${version}-stable_export_templates.tpz`, `${tl.getVariable("Agent.TempDirectory")}/${version}-templates.zip`);
             }
             else {
                 tl.logDetail("Template Download", "Templates found will not re-download them");
+            }
+            if (fetchTemplatesResult == 0) {
+                yield unzipArchive(`${tl.getVariable("Agent.TempDirectory")}/${version}-templates.zip`, `${templatesDir}/${version}`);
+            }
+            else {
+                tl.setResult(tl.TaskResult.Failed, "Unable fetch godot templates");
+                return;
             }
         }
         catch (err) {
@@ -74,6 +59,26 @@ function run() {
 function getTool(toolName) {
     let tool = tl.which(toolName, true);
     return tl.tool(tool);
+}
+function downloadFile(url, targetPath) {
+    return __awaiter(this, void 0, void 0, function* () {
+        let wget = getTool('wget');
+        wget.arg(url);
+        wget.arg("-O");
+        wget.arg(targetPath);
+        return wget.exec();
+    });
+}
+function unzipArchive(filePath, targetPath) {
+    return __awaiter(this, void 0, void 0, function* () {
+        tl.mkdirP(targetPath);
+        let unzip = getTool('unzip');
+        unzip.arg('-o');
+        unzip.arg(filePath);
+        unzip.arg('-d');
+        unzip.arg(targetPath);
+        return unzip.exec();
+    });
 }
 function shouldDownloadGodot(version) {
     return !fs_1.default.existsSync(`${tl.getVariable("Agent.ToolsDirectory")}/Godot_v${version}-stable_linux_server.64`);
